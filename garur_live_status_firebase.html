@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Garur — Live Status</title>
+<style>
+  :root{
+    --bg:#0a0c16; --bg2:#0f1224;
+    --card:#161a2e; --card-border:#262c4a;
+    --text:#eef0f7; --muted:#8b90ad;
+    --gold:#f2b632; --blue:#5b7cfa; --red:#f0524a; --teal:#3ecf9e;
+    --green:#34d399; --amber:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:20px 16px 40px;
+    background:radial-gradient(1200px 600px at 50% -10%, var(--bg2), var(--bg));
+    color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:760px; margin:0 auto}
+  header{text-align:center; margin-bottom:18px}
+  header h1{font-size:22px; margin:0 0 6px; letter-spacing:.2px}
+  .meta{color:var(--muted); font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px}
+  .livedot{width:8px;height:8px;border-radius:50%;background:#555;display:inline-block}
+  .livedot.live{background:var(--green); box-shadow:0 0 0 0 rgba(52,211,153,.6); animation:pulse 2s infinite}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}
+    70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}
+    100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}
+  }
+
+  .health-banner{
+    display:flex; align-items:center; gap:14px;
+    background:var(--card); border:1px solid var(--card-border); border-left:5px solid var(--muted);
+    border-radius:14px; padding:16px 18px; margin-bottom:16px;
+    transition:border-color .3s;
+  }
+  .health-banner.green{border-left-color:var(--green)}
+  .health-banner.amber{border-left-color:var(--amber)}
+  .health-banner.red{border-left-color:var(--danger)}
+  .health-dot{font-size:26px; line-height:1}
+  .health-title{font-weight:700; font-size:16px}
+  .health-sub{color:var(--muted); font-size:13px; margin-top:2px}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:12px}
+  .card{
+    background:var(--card); border:1px solid var(--card-border); border-radius:14px;
+    padding:16px;
+  }
+  .card-label{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px}
+
+  .state-card{
+    background:linear-gradient(160deg, var(--card), var(--bg2));
+    border-color:var(--state-color, var(--card-border));
+    text-align:center;
+  }
+  .state-icon{font-size:34px; line-height:1; margin-bottom:4px}
+  .state-name{font-size:19px; font-weight:700}
+  .state-sub{color:var(--muted); font-size:12px; margin-top:4px}
+
+  .row{display:flex; justify-content:space-between; align-items:center; font-size:14px; padding:5px 0}
+  .row span{color:var(--muted)}
+  .row b{font-weight:600}
+
+  #aiActionVal{font-size:15px; font-weight:600}
+  #aiReasonVal{color:var(--muted); font-size:13px; margin-top:6px; font-style:italic}
+
+  .timeline-row{display:flex; gap:10px; font-size:13px; padding:6px 0; border-top:1px solid var(--card-border)}
+  .timeline-row:first-child{border-top:none}
+  .tl-time{color:var(--muted); min-width:56px; flex-shrink:0}
+  .tl-action{color:var(--gold)}
+
+  .lan-card{border-color:var(--teal); background:linear-gradient(160deg, var(--card), #0f2620)}
+  .links{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+  a.btn{
+    background:#1f2440; color:var(--text); border:1px solid var(--card-border); border-radius:9px;
+    padding:9px 14px; font-size:13px; text-decoration:none; display:inline-block;
+  }
+  a.btn:hover{border-color:var(--gold)}
+
+  footer{margin-top:22px; text-align:center}
+  details{color:var(--muted); font-size:12px; text-align:left; background:var(--card); border:1px solid var(--card-border);
+    border-radius:12px; padding:12px 16px}
+  summary{cursor:pointer; color:var(--text); font-weight:600; font-size:13px}
+  details p{margin:8px 0}
+  code{background:#0d0f1c; padding:1px 5px; border-radius:5px; font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🦅 Garur — Live Status</h1>
+    <div class="meta"><span class="livedot" id="liveDot"></span> <span id="lastUpdated">checking…</span> · via Firebase</div>
+  </header>
+
+  <div class="health-banner" id="healthBanner">
+    <div class="health-dot" id="healthDot">⏳</div>
+    <div>
+      <div class="health-title" id="healthTitle">Checking…</div>
+      <div class="health-sub" id="healthSub"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card state-card" id="stateCard">
+      <div class="card-label">Current show state</div>
+      <div class="state-icon" id="stateIcon">–</div>
+      <div class="state-name" id="stateName">–</div>
+      <div class="state-sub" id="lightPreset"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Presence</div>
+      <div class="row"><span>Entry</span><b id="entryVal">–</b></div>
+      <div class="row"><span>Exit</span><b id="exitVal">–</b></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Hardware</div>
+      <div class="row"><span>Nano link</span><b id="nanoVal">–</b></div>
+      <div class="row"><span>Fault</span><b id="faultVal">–</b></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Last AI action</div>
+      <div id="aiActionVal">–</div>
+      <div id="aiReasonVal"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-label">Recent activity</div>
+    <div id="timeline">Loading…</div>
+  </div>
+
+  <div class="card lan-card" id="lanCard" style="display:none">
+    <div class="card-label">📶 You look like you're on the show network</div>
+    <div class="links" id="lanLinks"></div>
+  </div>
+
+  <footer>
+    <details>
+      <summary>Setup &amp; notes</summary>
+      <p><code>FIREBASE_DB_URL</code> and <code>FIREBASE_AUTH</code> are already configured in this file.</p>
+      <p>This page only ever <em>reads</em> from Firebase. The auth value is included in the page URL when requests are made, so use a Firebase credential intended for client-side read access only.</p>
+      <p>The "you're on the show network" panel only appears if this page can actually reach the Hub's local address. If you host this page over <strong>HTTPS</strong>, browsers block that check from reaching a plain-HTTP local device (mixed content) — for that panel to work, open this file locally or host it over plain HTTP on your own network instead.</p>
+      <p>"Last seen" is read from the timestamp built into Firebase's own event keys, not the device's clock — so it stays accurate even if a device's clock is wrong.</p>
+    </details>
+  </footer>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// CONFIG - already configured for your Firebase deployment
+// ---------------------------------------------------------------------------
+const FIREBASE_DB_URL = "https://kali-puja-2026-default-rtdb.asia-southeast1.firebasedatabase.app/";
+const FIREBASE_AUTH = "2nmW7Pw1qHDw1awMFULed97ejfbOpLYboVSqQJJ0";
+
+const HUB_BASE = "http://192.168.0.10";
+const SENSOR_LINKS = [
+  { label: "Entry sensor", base: "http://192.168.0.20" },
+  { label: "Exit sensor",  base: "http://192.168.0.21" }
+];
+const MISSION_CONTROL_BASE = "";
+
+const REFRESH_MS = 30000;
+const FRESH_MIN = 7;
+const STALE_MIN = 20;
+
+// ---------------------------------------------------------------------------
+// Firebase push-ID timestamp decoding
+// ---------------------------------------------------------------------------
+const PUSH_CHARS = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+function decodePushTime(pushId) {
+  if (!pushId || pushId.length < 8) return null;
+  let ts = 0;
+  for (let i = 0; i < 8; i++) {
+    const idx = PUSH_CHARS.indexOf(pushId[i]);
+    if (idx < 0) return null;
+    ts = ts * 64 + idx;
+  }
+  return ts;
+}
+
+function fbUrl(path, extra) {
+  let u = FIREBASE_DB_URL.replace(/\/$/, "") + "/" + path + ".json";
+  const params = [];
+  if (extra) params.push(extra);
+  if (FIREBASE_AUTH) params.push("auth=" + encodeURIComponent(FIREBASE_AUTH));
+  if (params.length) u += "?" + params.join("&");
+  return u;
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function toSortedEntries(obj) {
+  if (!obj) return [];
+  return Object.entries(obj).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function fmtAgo(ms) {
+  if (ms == null) return "unknown";
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return s + "s ago";
+  const m = Math.round(s / 60);
+  if (m < 60) return m + "m ago";
+  const h = Math.round(m / 60);
+  return h + "h ago";
+}
+
+const STATE_INFO = {
+  IDLE:                  { label: "Idle",                     icon: "💤", color: "var(--blue)" },
+  NORMAL:                { label: "Normal",                   icon: "🚶", color: "var(--teal)" },
+  FIGHT:                 { label: "Fight",                    icon: "⚔️", color: "var(--red)" },
+  CELEBRATION:           { label: "Celebration",               icon: "🎉", color: "var(--gold)" },
+  SHOWCASE_NORMAL_INTRO: { label: "Showcase — intro",          icon: "✨", color: "var(--teal)" },
+  SHOWCASE_FIGHT:        { label: "Showcase — fight",          icon: "✨⚔️", color: "var(--red)" },
+  SHOWCASE_CELEBRATION:  { label: "Showcase — celebration",    icon: "✨🎉", color: "var(--gold)" },
+  SHOWCASE_RECOVERY:     { label: "Showcase — recovery",       icon: "✨", color: "var(--teal)" },
+  FAULT_SAFE:            { label: "Fault — stopped safe",      icon: "🛑", color: "var(--danger)" }
+};
+
+function analyzeHealth(current, lastSeenMs) {
+  const ageMin = lastSeenMs ? (Date.now() - lastSeenMs) / 60000 : Infinity;
+  if (!lastSeenMs || ageMin > STALE_MIN) {
+    return { level:"red", icon:"🔴", title:"No recent check-in",
+      sub: lastSeenMs ? "Last seen " + fmtAgo(lastSeenMs) + " — AI Monitor may be offline" : "No data received yet" };
+  }
+  if (current && current.fault) {
+    return { level:"red", icon:"🔴", title:"Fault: " + current.fault, sub:"Hub reported a fault on its last check-in" };
+  }
+  if (current && current.nanoOk === false) {
+    return { level:"amber", icon:"🟡", title:"Nano link degraded", sub:"Hub says the Nano link isn't healthy right now" };
+  }
+  if (ageMin > FRESH_MIN) {
+    return { level:"amber", icon:"🟡", title:"Check-in running late", sub:"Last seen " + fmtAgo(lastSeenMs) + " (usually every ~5 min)" };
+  }
+  return { level:"green", icon:"🟢", title:"Healthy", sub:"Reporting normally — last seen " + fmtAgo(lastSeenMs) };
+}
+
+function render(current, eventEntries, actionEntries, lastSeenMs) {
+  const health = analyzeHealth(current, lastSeenMs);
+  const banner = document.getElementById("healthBanner");
+  banner.className = "health-banner " + health.level;
+  document.getElementById("healthDot").textContent = health.icon;
+  document.getElementById("healthTitle").textContent = health.title;
+  document.getElementById("healthSub").textContent = health.sub;
+
+  const s = current && current.state;
+  const info = STATE_INFO[s] || { label: s || "Unknown", icon: "❔", color: "var(--muted)" };
+  document.getElementById("stateIcon").textContent = info.icon;
+  document.getElementById("stateName").textContent = info.label;
+  document.getElementById("stateCard").style.setProperty("--state-color", info.color);
+  document.getElementById("lightPreset").textContent = current && current.light ? "Lighting preset: " + current.light : "";
+
+  document.getElementById("entryVal").textContent = current
+    ? (current.entry ? "Active" : "Clear") + (current.entryScore != null ? " (" + current.entryScore + ")" : "")
+    : "–";
+  document.getElementById("exitVal").textContent = current
+    ? (current.exit ? "Active" : "Clear") + (current.exitScore != null ? " (" + current.exitScore + ")" : "")
+    : "–";
+
+  document.getElementById("nanoVal").textContent = current ? (current.nanoOk ? "OK" : "Check") : "–";
+  document.getElementById("faultVal").textContent = (current && current.fault) ? current.fault : "None";
+
+  document.getElementById("aiActionVal").textContent = (current && current.aiAction) ? current.aiAction : "NONE";
+  document.getElementById("aiReasonVal").textContent = (current && current.aiReason) ? "“" + current.aiReason + "”" : "";
+
+  const rows = [];
+  eventEntries.forEach(([key, val]) => rows.push({ t: decodePushTime(key), text: (val && val.state) || "?", cls:"" }));
+  actionEntries.forEach(([key, val]) => rows.push({
+    t: decodePushTime(key),
+    text: ((val && val.action) || "?") + ((val && val.reason) ? " — " + val.reason : ""),
+    cls: "tl-action"
+  }));
+  rows.sort((a, b) => (b.t || 0) - (a.t || 0));
+  const tl = document.getElementById("timeline");
+  tl.innerHTML = rows.length
+    ? rows.slice(0, 12).map(r =>
+        `<div class="timeline-row"><span class="tl-time">${r.t ? fmtAgo(r.t) : "?"}</span><span class="${r.cls}">${escapeHtml(r.text)}</span></div>`
+      ).join("")
+    : "No activity recorded yet.";
+
+  document.getElementById("lastUpdated").textContent = lastSeenMs ? fmtAgo(lastSeenMs) : "no data yet";
+  document.getElementById("liveDot").className = "livedot" + (lastSeenMs && (Date.now() - lastSeenMs) < FRESH_MIN * 60000 ? " live" : "");
+}
+
+async function refresh() {
+  if (!FIREBASE_DB_URL || FIREBASE_DB_URL.includes("YOUR_DB")) {
+    document.getElementById("healthBanner").className = "health-banner amber";
+    document.getElementById("healthDot").textContent = "⚙️";
+    document.getElementById("healthTitle").textContent = "Not configured yet";
+    document.getElementById("healthSub").textContent = "Set FIREBASE_DB_URL at the top of the script.";
+    return;
+  }
+  try {
+    const [current, events, actions] = await Promise.all([
+      fetchJson(fbUrl("garur/current")),
+      fetchJson(fbUrl("garur/events", "orderBy=%22$key%22&limitToLast=12")),
+      fetchJson(fbUrl("garur/aiActions", "orderBy=%22$key%22&limitToLast=8"))
+    ]);
+    const eventEntries = toSortedEntries(events);
+    const lastEventKey = eventEntries.length ? eventEntries[eventEntries.length - 1][0] : null;
+    const lastSeenMs = decodePushTime(lastEventKey);
+    render(current, eventEntries.slice().reverse(), toSortedEntries(actions).reverse(), lastSeenMs);
+  } catch (e) {
+    document.getElementById("healthBanner").className = "health-banner red";
+    document.getElementById("healthDot").textContent = "🔴";
+    document.getElementById("healthTitle").textContent = "Can't reach Firebase";
+    document.getElementById("healthSub").textContent = String((e && e.message) || e);
+  }
+}
+
+async function probeLan() {
+  if (!HUB_BASE) return;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1200);
+    await fetch(HUB_BASE + "/api/status", { mode: "no-cors", signal: ctrl.signal });
+    clearTimeout(timer);
+    const card = document.getElementById("lanCard");
+    const linksEl = document.getElementById("lanLinks");
+    const links = [{ label: "Hub dashboard", href: HUB_BASE + "/" }, { label: "Hub settings", href: HUB_BASE + "/settings" }];
+    SENSOR_LINKS.forEach(s => links.push({ label: s.label, href: s.base + "/" }));
+    if (MISSION_CONTROL_BASE) links.push({ label: "Mission Control", href: MISSION_CONTROL_BASE + "/" });
+    linksEl.innerHTML = links.map(l => `<a class="btn" href="${l.href}" target="_blank" rel="noopener">${escapeHtml(l.label)} ↗</a>`).join("");
+    card.style.display = "";
+  } catch (e) {
+    // Not reachable (different network, or mixed-content blocked from HTTPS) - stay hidden.
+  }
+}
+
+refresh();
+probeLan();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
